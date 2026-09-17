@@ -565,7 +565,8 @@
     const F=[["שם משפחה","lastName",false],["שם פרטי","firstName",false],
       ["מספר תיק","file",true],["תעודת זהות","id",true],
       ["כתובת","address",false],["טלפון המטופל","phone",true],
-      ["מספר הפניה","referral",true],["סוג הטיפול","treatment",false]];
+      ["מספר הפניה","referral",true],["סוג הטיפול","treatment",false],
+      ["כמות טיפולים מאושרת","qty",true]];
     $("#fields").innerHTML = F.map(([l,k,n])=>`<div class="fld"><div class="l">${l}</div><div class="v ${n?'num':''}" data-k="${k}">${data[k]||""}</div></div>`).join("");
     refreshHeaders();
     $("#newRefBtn").hidden = (source==="new");
@@ -617,10 +618,10 @@
   function saveEdits(){
     const oldId=data.id;
     $("#fields").querySelectorAll(".v[data-k]").forEach(v=>{ data[v.dataset.k]=v.textContent.replace(/\s+/g," ").trim(); });
-    refreshHeaders();
+    refreshHeaders(); updateCount();
     const rec=PATIENTS.find(p=>p.id===oldId);   // persist to the stored patient record
     if(rec) Object.assign(rec,{firstName:data.firstName,lastName:data.lastName,file:data.file,
-      address:data.address,phone:data.phone,referral:data.referral,treatment:data.treatment,catalog:data.catalog});
+      address:data.address,phone:data.phone,referral:data.referral,treatment:data.treatment,catalog:data.catalog,qty:data.qty});
   }
   $("#editBtn").onclick=()=>{ if(editing){ fieldsFromData(); setEditing(false);} else setEditing(true); };
   $("#saveBtn").onclick=()=>{ saveEdits(); setEditing(false); };
