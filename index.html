@@ -492,6 +492,11 @@
   function todayStr(){ const d=new Date(); return fmt(d); }
   function fmt(d){ return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }
   function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return fmt(d); }
+  // Israeli phone -> international (05XXXXXXXX -> 9725XXXXXXXX) for wa.me links
+  function intlPhone(raw){ let d=String(raw||"").replace(/\D/g,"");
+    if(d.startsWith("972")) return d; if(d.startsWith("0")) return "972"+d.slice(1);
+    if(d.length===9) return "972"+d; return d; }
+  function waLinkFor(phone,msg){ return `https://wa.me/${intlPhone(phone)}?text=${encodeURIComponent(msg)}`; }
 
   // hand-drawn signature svg for prior (already-signed) rows
   const SIGS = [
@@ -814,7 +819,7 @@
         <div><div class="nm">אל: ${phone||"המטופל"}</div><div class="sub">קישור אמיתי · ממתין לחתימה</div></div>
       </div>
       <div class="wa-chat">
-        <div class="wa-bubble">שלום ${data.firstName} 👋<br>לחתימה על אישור הטיפול מהיום (${dateTxt}) ✍️<br><br>
+        <div class="wa-bubble">שלום ${data.firstName},<br>לחתימה על אישור הטיפול מהיום (${dateTxt}):<br><br>
           <a class="lnk" href="${signUrl}" target="_blank" rel="noopener" style="direction:ltr;unicode-bidi:embed;">${signUrl}</a>
           <div class="wa-time">${new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})} ✓</div>
         </div>
@@ -850,30 +855,28 @@
   $("#apptSend").onclick=()=>{
     const dv=$("#apptDate").value, tv=$("#apptTime").value;
     if(!dv||!tv){ alert("יש לבחור תאריך ושעה לתור."); return; }
+    if(!data || !data.phone){ alert("אין מספר טלפון למטופל."); return; }
     const [y,m,day]=dv.split("-");
     const nice=`${day}/${m}/${y}`;
+    const msg=`שלום ${data.firstName}, תזכורת לתור הבא שלך במכון הפיזיותרפיה:\n${nice} בשעה ${tv}`;
+    const waLink=waLinkFor(data.phone, msg);
     goStep(3);
-    showAppt(nice,tv);
+    showAppt(nice,tv,waLink);
+    try{ window.open(waLink,"_blank"); }catch(e){}   // real WhatsApp send (wa.me)
     $("#apptPanel").hidden=true; $("#apptToggle").setAttribute("aria-expanded","false");
   };
-  function showAppt(dateStr,timeStr){
+  function showAppt(dateStr,timeStr,waLink){
     body.innerHTML=`
       <div class="wa-head">
         <div class="wa-av"><svg viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2z"/></svg></div>
-        <div><div class="nm">מכון פיזיותרפיה</div><div class="sub">מקוון</div></div>
+        <div><div class="nm">אל: ${data.phone||"המטופל"}</div><div class="sub">זימון תור · וואטסאפ</div></div>
       </div>
       <div class="wa-chat">
-        <div class="wa-bubble">שלום ${data.firstName} 👋<br>תזכורת לתור הבא שלך:<br>📅 <b>${dateStr}</b> בשעה <b>${timeStr}</b><br>מכון פיזיותרפיה — שירלי מדמון ריבל
-          <div class="wa-time">${new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})} ✓✓</div>
+        <div class="wa-bubble">שלום ${data.firstName}, תזכורת לתור הבא שלך במכון הפיזיותרפיה:<br><b>${dateStr}</b> בשעה <b>${timeStr}</b>
+          <div class="wa-time">${new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})} ✓</div>
         </div>
-        <div style="align-self:flex-end;display:flex;gap:7px;">
-          <button class="btn btn-wa" style="width:auto;padding:8px 14px;font-size:12.5px;" id="apptConfirm">✓ מאשר הגעה</button>
-        </div>
+        <a class="btn btn-wa" href="${waLink}" target="_blank" rel="noopener" style="text-decoration:none;align-self:center;width:auto;padding:9px 16px;font-size:13px;">${WA_ICON}פתח וואטסאפ לשליחה</a>
       </div>`;
-    $("#apptConfirm").onclick=()=>{
-      body.innerHTML=`<div class="ph-success ph-pad"><div class="succ-ring"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
-        <h3>התור אושר</h3><p>${data.firstName} אישר/ה הגעה לתור ב-${dateStr} בשעה ${timeStr}.</p></div>`;
-    };
   }
 
   // ---- download signed form (print to PDF) ----
@@ -917,7 +920,7 @@
         <div><div class="nm">מכון פיזיותרפיה</div><div class="sub">מקוון</div></div>
       </div>
       <div class="wa-chat">
-        <div class="wa-bubble">שלום ${data.firstName} 👋<br>לחתימה על אישור הטיפול מהיום (${todayStr()}) — לחצו על הקישור:
+        <div class="wa-bubble">שלום ${data.firstName},<br>לחתימה על אישור הטיפול מהיום (${todayStr()}) — לחצו על הקישור:
           <span class="lnk" id="waLink">🔗 sign.clinic.co.il/s/${Math.random().toString(36).slice(2,8)}</span>
           <div class="wa-time">${new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})} ✓✓</div>
         </div>

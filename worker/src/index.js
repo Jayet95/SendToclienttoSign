@@ -308,8 +308,8 @@ function waMeLink(phone, text) {
 
 function waMessage(session, signUrl) {
   const name = session.patient.firstName || "";
-  // greeting + purpose on their own lines, link on a line of its own below
-  return `שלום ${name} 👋\nלחתימה על אישור הטיפול מהיום (${session.treatment.date}) ✍️\n\n${signUrl}`;
+  // plain text (no emoji — avoids � on some WhatsApp clients); link on its own line
+  return `שלום ${name},\nלחתימה על אישור הטיפול מהיום (${session.treatment.date}):\n\n${signUrl}`;
 }
 
 function cors(env, res) {
