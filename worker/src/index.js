@@ -40,6 +40,12 @@ export default {
         return cors(env, await signSession(request, env, m[1]));
       }
 
+      // POST /api/sessions/:id/cancel  -> invalidate a session (treatment deleted)
+      m = pathname.match(/^\/api\/sessions\/([A-Za-z0-9_-]+)\/cancel$/);
+      if (m && method === "POST") {
+        return cors(env, await cancelSession(env, m[1]));
+      }
+
       // POST /api/whatsapp  -> send the link over WhatsApp
       if (pathname === "/api/whatsapp" && method === "POST") {
         return cors(env, await sendWhatsApp(request, env));
@@ -118,9 +124,12 @@ async function signSession(request, env, id) {
   if (!raw) return json({ error: "not_found" }, 404);
   const s = JSON.parse(raw);
 
-  // validation: a session can be signed only once
+  // validation: can't sign a session that is already signed or was cancelled
   if (s.status === "signed") {
     return json({ error: "already_signed", signedAt: s.signedAt }, 409);
+  }
+  if (s.status === "cancelled") {
+    return json({ error: "cancelled" }, 409);
   }
 
   const body = await request.json().catch(() => ({}));
@@ -137,6 +146,18 @@ async function signSession(request, env, id) {
   s.signature = sig;
   await env.SESSIONS.put(id, JSON.stringify(s), { expirationTtl: SESSION_TTL });
   return json({ ok: true, status: "signed", signedAt: s.signedAt });
+}
+
+async function cancelSession(env, id) {
+  const raw = await env.SESSIONS.get(id);
+  if (!raw) return json({ ok: true, status: "gone" });
+  const s = JSON.parse(raw);
+  if (s.status !== "signed") {
+    s.status = "cancelled";
+    s.cancelledAt = new Date().toISOString();
+    await env.SESSIONS.put(id, JSON.stringify(s), { expirationTtl: 60 * 60 * 24 * 7 });
+  }
+  return json({ ok: true, status: s.status });
 }
 
 async function sendWhatsApp(request, env) {
@@ -201,12 +222,26 @@ async function sendSms(request, env) {
 
 /* ------------------------- signing page ------------------------- */
 
+function infoPage(icon, title, msg, status) {
+  return html(
+    `<div class="card" style="text-align:center">
+      <div class="ring" style="background:#eef0f3;color:#5a6473;font-size:30px">${icon}</div>
+      <h1>${title}</h1><p style="color:#5a6473">${msg}</p>
+      <p style="color:#8b95a4;font-size:12px;margin-top:14px">אם לדעתך זו טעות, פנו למכון הפיזיותרפיה.</p>
+    </div>`,
+    status
+  );
+}
+
 async function signingPage(env, id) {
   const raw = await env.SESSIONS.get(id);
   if (!raw) {
-    return html(`<div class="card"><h1>הקישור לא נמצא</h1><p>ייתכן שפג תוקפו.</p></div>`, 404);
+    return infoPage("🔗", "הקישור אינו זמין", "ייתכן שפג תוקפו של הקישור או שהוא הוסר.", 404);
   }
   const s = JSON.parse(raw);
+  if (s.status === "cancelled") {
+    return infoPage("🚫", "הבקשה בוטלה", "המכון ביטל את בקשת החתימה על טיפול זה. אין צורך לחתום.", 200);
+  }
   const p = s.patient, t = s.treatment;
   const already = s.status === "signed";
 
@@ -245,8 +280,8 @@ async function signingPage(env, id) {
 /* ------------------------- helpers ------------------------- */
 
 function newId() {
-  // URL-safe short id
-  const a = new Uint8Array(12);
+  // short URL-safe id (~8 chars) to keep the signing link compact
+  const a = new Uint8Array(6);
   crypto.getRandomValues(a);
   return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
@@ -273,7 +308,8 @@ function waMeLink(phone, text) {
 
 function waMessage(session, signUrl) {
   const name = session.patient.firstName || "";
-  return `שלום ${name}, לחתימה על אישור הטיפול מהיום (${session.treatment.date}): ${signUrl}`;
+  // greeting + purpose on their own lines, link on a line of its own below
+  return `שלום ${name} 👋\nלחתימה על אישור הטיפול מהיום (${session.treatment.date}) ✍️\n\n${signUrl}`;
 }
 
 function cors(env, res) {
