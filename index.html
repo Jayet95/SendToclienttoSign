@@ -1,0 +1,625 @@
+<title>טופס חותם</title>
+<meta name="description" content="אב-טיפוס: מילוי אוטומטי של דוח ביצוע טיפולים מהפניית משרד הביטחון וחתימת מטופל דיגיטלית בקישור וואטסאפ.">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=Assistant:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --ground:#eef0f3; --surface:#ffffff; --surface-2:#f7f8fa; --line:#dde1e7;
+    --ink:#1a2233; --ink-soft:#5a6473; --ink-faint:#8b95a4;
+    --accent:#0f6e68; --accent-soft:#e2f1ef; --accent-ink:#0a4d48;
+    --ok:#1f8a4c; --ok-soft:#e4f4ea; --warn:#b06a00; --warn-soft:#fbefda;
+    --wa:#25d366; --wa-dark:#075e54; --wa-head:#128c7e; --wa-bg:#e5ddd5; --wa-bubble:#dcf8c6;
+    --phone-bg:#0e141c; --phone-screen:#f4f6f8;
+    --shadow:0 1px 2px rgba(20,30,50,.06),0 8px 24px rgba(20,30,50,.08);
+    --shadow-lg:0 12px 40px rgba(20,30,50,.16);
+    --r:14px; --r-sm:9px;
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme:dark){
+      --ground:#0d1117; --surface:#161c26; --surface-2:#1c232f; --line:#2a3340;
+      --ink:#e8ecf2; --ink-soft:#9aa6b6; --ink-faint:#6b7688;
+      --accent:#3fb6ad; --accent-soft:#123531; --accent-ink:#8fe0d8;
+      --ok:#4cc47e; --ok-soft:#123021; --warn:#e0a24a; --warn-soft:#332611;
+      --wa:#25d366; --wa-dark:#0b3d37; --wa-head:#0b3d37; --wa-bg:#0b141a; --wa-bubble:#075e54;
+      --phone-bg:#05080c; --phone-screen:#0f151d;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.5);
+      --shadow-lg:0 12px 40px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0d1117; --surface:#161c26; --surface-2:#1c232f; --line:#2a3340;
+    --ink:#e8ecf2; --ink-soft:#9aa6b6; --ink-faint:#6b7688;
+    --accent:#3fb6ad; --accent-soft:#123531; --accent-ink:#8fe0d8;
+    --ok:#4cc47e; --ok-soft:#123021; --warn:#e0a24a; --warn-soft:#332611;
+    --wa:#25d366; --wa-dark:#0b3d37; --wa-head:#0b3d37; --wa-bg:#0b141a; --wa-bubble:#075e54;
+    --phone-bg:#05080c; --phone-screen:#0f151d;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.5);
+    --shadow-lg:0 12px 40px rgba(0,0,0,.6);
+  }
+  *{box-sizing:border-box}
+  html{direction:rtl}
+  body{background:var(--ground);color:var(--ink);
+    font-family:"Assistant",-apple-system,"Segoe UI",sans-serif;line-height:1.5;
+    -webkit-font-smoothing:antialiased;}
+  h1,h2,h3,.display{font-family:"Rubik","Assistant",sans-serif;}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 20px 60px;}
+
+  header.top{display:flex;align-items:center;gap:14px;margin-bottom:8px;}
+  .logo{width:42px;height:42px;border-radius:11px;background:var(--accent);
+    display:grid;place-items:center;flex:none;box-shadow:var(--shadow);}
+  .logo svg{width:24px;height:24px;stroke:#fff;}
+  .brand h1{font-size:22px;font-weight:700;margin:0;letter-spacing:-.2px;}
+  .brand p{margin:0;color:var(--ink-soft);font-size:13.5px;}
+  .demo-flag{margin-inline-start:auto;display:flex;align-items:center;gap:7px;
+    background:var(--warn-soft);color:var(--warn);padding:6px 12px;border-radius:999px;
+    font-size:12.5px;font-weight:600;}
+  .demo-flag .dot{width:7px;height:7px;border-radius:50%;background:var(--warn);}
+
+  .steps{display:flex;gap:8px;margin:20px 0 22px;flex-wrap:wrap;}
+  .step{display:flex;align-items:center;gap:9px;padding:9px 14px;border-radius:999px;
+    background:var(--surface);border:1px solid var(--line);font-size:13.5px;
+    color:var(--ink-soft);font-weight:500;transition:.25s;}
+  .step .n{width:22px;height:22px;border-radius:50%;background:var(--surface-2);
+    border:1px solid var(--line);display:grid;place-items:center;font-size:12px;
+    font-weight:700;font-family:"Rubik";flex:none;}
+  .step.active{color:var(--accent-ink);background:var(--accent-soft);border-color:transparent;}
+  .step.active .n{background:var(--accent);color:#fff;border-color:transparent;}
+  .step.done .n{background:var(--ok);color:#fff;border-color:transparent;}
+
+  .grid{display:grid;grid-template-columns:1fr 372px;gap:22px;align-items:start;}
+  @media (max-width:920px){.grid{grid-template-columns:1fr;}}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+    box-shadow:var(--shadow);overflow:hidden;}
+  .card-h{padding:15px 18px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:10px;}
+  .card-h h2{font-size:15.5px;margin:0;font-weight:600;}
+  .card-h .k{font-size:11.5px;color:var(--ink-faint);margin-inline-start:auto;
+    text-transform:uppercase;letter-spacing:.6px;font-weight:600;}
+  .card-b{padding:18px;}
+
+  /* ---- entry choice ---- */
+  .choice{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media (max-width:560px){.choice{grid-template-columns:1fr;}}
+  .choice-card{border:1.5px solid var(--line);border-radius:var(--r);padding:22px 18px;
+    text-align:center;cursor:pointer;transition:.18s;background:var(--surface-2);}
+  .choice-card:hover{border-color:var(--accent);background:var(--accent-soft);transform:translateY(-2px);}
+  .choice-ic{width:52px;height:52px;border-radius:14px;background:var(--surface);
+    border:1px solid var(--line);display:grid;place-items:center;margin:0 auto 12px;}
+  .choice-ic svg{width:26px;height:26px;stroke:var(--accent);}
+  .choice-card .t{font-weight:700;font-size:16px;font-family:"Rubik";}
+  .choice-card .s{color:var(--ink-soft);font-size:13px;margin-top:5px;line-height:1.45;}
+
+  .back{background:none;border:none;color:var(--accent);cursor:pointer;font-family:inherit;
+    font-weight:600;font-size:13.5px;display:inline-flex;align-items:center;gap:6px;
+    margin-bottom:14px;padding:4px 0;}
+  .back svg{width:15px;height:15px;stroke:currentColor;}
+
+  /* ---- patient list ---- */
+  .plist{display:flex;flex-direction:column;gap:9px;margin-bottom:6px;}
+  .pcard{display:flex;align-items:center;gap:13px;padding:13px 15px;border:1px solid var(--line);
+    border-radius:var(--r-sm);cursor:pointer;transition:.15s;background:var(--surface);}
+  .pcard:hover{border-color:var(--accent);background:var(--accent-soft);}
+  .pav{width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);
+    display:grid;place-items:center;font-weight:700;font-family:"Rubik";flex:none;font-size:15px;}
+  .pcard .info{flex:1;min-width:0;}
+  .pcard .nm{font-weight:700;font-size:14.5px;}
+  .pcard .meta{font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+  .pcard .prog{text-align:left;font-size:12px;color:var(--ink-soft);flex:none;}
+  .pcard .prog b{color:var(--accent-ink);font-family:"Rubik";font-size:15px;}
+  .chev{stroke:var(--ink-faint);width:18px;height:18px;flex:none;}
+  .divider{display:flex;align-items:center;gap:12px;color:var(--ink-faint);font-size:12.5px;
+    margin:16px 0;font-weight:600;}
+  .divider::before,.divider::after{content:"";height:1px;background:var(--line);flex:1;}
+
+  .drop{border:2px dashed var(--line);border-radius:var(--r);padding:26px 20px;
+    text-align:center;cursor:pointer;transition:.2s;background:var(--surface-2);}
+  .drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft);}
+  .drop svg{width:36px;height:36px;stroke:var(--accent);margin-bottom:8px;}
+  .drop .t{font-weight:600;font-size:15px;}
+  .drop .s{color:var(--ink-soft);font-size:12.5px;margin-top:4px;}
+  .drop .file{margin-top:12px;font-size:12.5px;color:var(--accent-ink);
+    background:var(--accent-soft);display:inline-block;padding:5px 12px;border-radius:999px;font-weight:600;}
+
+  .fields{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;}
+  @media (max-width:520px){.fields{grid-template-columns:1fr;}}
+  .fld{background:var(--surface);padding:11px 13px;}
+  .fld .l{font-size:11.5px;color:var(--ink-faint);font-weight:600;letter-spacing:.3px;}
+  .fld .v{font-size:14.5px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .fld .v.num{font-family:"Rubik";}
+  .badge-auto{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--accent);font-weight:700;}
+  .badge-auto svg{width:12px;height:12px;stroke:var(--accent);}
+
+  .rep-head{display:flex;flex-wrap:wrap;gap:8px 18px;padding:14px 16px;background:var(--surface-2);
+    border-radius:var(--r-sm);margin-bottom:14px;border:1px solid var(--line);}
+  .rep-head .pair{font-size:13px;} .rep-head .pair b{font-weight:600;} .rep-head .pair span{color:var(--ink-soft);}
+  .rep-title{font-weight:700;font-size:14.5px;margin-bottom:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .rep-title .count{font-size:12px;font-weight:600;color:var(--ink-soft);background:var(--surface-2);
+    border:1px solid var(--line);padding:2px 9px;border-radius:999px;font-family:"Assistant";}
+  .tbl-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-sm);}
+  table{border-collapse:collapse;width:100%;min-width:560px;font-size:13px;}
+  th{background:var(--surface-2);color:var(--ink-soft);font-weight:600;font-size:11.5px;text-align:right;
+    padding:9px 11px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;}
+  td{padding:10px 11px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tr.prior td{color:var(--ink-soft);}
+  td.idx{color:var(--ink-faint);width:26px;text-align:center;}
+  td.today{font-weight:700;color:var(--accent-ink);}
+  tr.newrow{background:var(--accent-soft);}
+  .sig-cell{width:130px;}
+  .sig-pending{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--warn);font-weight:600;}
+  .sig-pending .pulse{width:7px;height:7px;border-radius:50%;background:var(--warn);animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .sig-img{height:32px;display:block;}
+  .sig-svg{height:26px;color:var(--ink-soft);opacity:.8;}
+  .sig-done{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--ok);font-weight:700;white-space:nowrap;}
+  .sig-done svg{width:12px;height:12px;stroke:var(--ok);}
+
+  .btn{appearance:none;border:none;cursor:pointer;font-family:inherit;font-weight:600;font-size:14.5px;
+    padding:12px 20px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;
+    gap:9px;transition:.16s;width:100%;}
+  .btn svg{width:18px;height:18px;}
+  .btn-wa{background:var(--wa);color:#0a2e13;box-shadow:var(--shadow);}
+  .btn-wa svg{fill:#0a2e13;stroke:none;}
+  .btn-wa:hover{filter:brightness(1.06);transform:translateY(-1px);}
+  .btn-wa:disabled{background:var(--line);color:var(--ink-faint);cursor:not-allowed;box-shadow:none;transform:none;filter:none;}
+  .btn-ghost{background:var(--surface-2);color:var(--ink);border:1px solid var(--line);}
+  .btn-ghost svg{stroke:currentColor;}
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent-ink);}
+  .btn-ok{background:var(--ok);color:#fff;} .btn-ok svg{stroke:#fff;}
+  .btn-row{display:flex;gap:10px;margin-top:16px;} .btn-row .btn{width:auto;flex:1;}
+
+  .hint{font-size:12.5px;color:var(--ink-soft);margin-top:12px;display:flex;gap:8px;align-items:flex-start;line-height:1.45;}
+  .hint svg{width:15px;height:15px;stroke:var(--accent);flex:none;margin-top:1px;}
+
+  .phone-col{position:sticky;top:20px;}
+  .phone{background:var(--phone-bg);border-radius:34px;padding:11px;box-shadow:var(--shadow-lg);max-width:340px;margin:0 auto;}
+  .phone-screen{background:var(--phone-screen);border-radius:25px;overflow:hidden;min-height:540px;position:relative;display:flex;flex-direction:column;}
+  .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:120px;height:22px;background:var(--phone-bg);border-radius:0 0 14px 14px;z-index:5;}
+  .ph-status{padding:9px 20px 5px;display:flex;justify-content:space-between;font-size:11.5px;font-weight:600;color:var(--ink);opacity:.7;}
+  .ph-body{flex:1;display:flex;flex-direction:column;overflow-y:auto;}
+  .ph-pad{padding:14px;}
+
+  .ph-idle{margin:auto;text-align:center;color:var(--ink-faint);padding:30px 16px;}
+  .ph-idle svg{width:44px;height:44px;stroke:var(--ink-faint);margin-bottom:12px;opacity:.7;}
+  .ph-idle .t{font-size:14px;font-weight:600;color:var(--ink-soft);}
+
+  /* whatsapp chat */
+  .wa-head{background:var(--wa-head);color:#fff;display:flex;align-items:center;gap:10px;padding:12px 14px;}
+  .wa-av{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.25);display:grid;place-items:center;flex:none;}
+  .wa-av svg{width:19px;height:19px;fill:#fff;}
+  .wa-head .nm{font-weight:700;font-size:14px;line-height:1.1;} .wa-head .sub{font-size:11px;opacity:.85;}
+  .wa-chat{flex:1;background:var(--wa-bg);padding:16px 12px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;}
+  .wa-bubble{background:var(--wa-bubble);color:#0b1e10;border-radius:9px 9px 9px 2px;padding:9px 11px;
+    font-size:13px;box-shadow:0 1px 1px rgba(0,0,0,.12);max-width:88%;align-self:flex-start;animation:pop .3s ease;line-height:1.5;}
+  :root[data-theme="dark"] .wa-bubble,:root:not([data-theme="light"]) .wa-bubble{color:#e8f5e9;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .wa-bubble{color:#e8f5e9;}}
+  @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
+  .wa-bubble .lnk{color:#039be5;font-weight:600;text-decoration:none;word-break:break-all;display:inline-block;margin-top:5px;cursor:pointer;}
+  .wa-time{font-size:10px;opacity:.6;margin-top:4px;text-align:left;}
+  .tap-cue{align-self:center;text-align:center;margin-top:6px;font-size:12px;color:#fff;background:rgba(0,0,0,.35);
+    padding:6px 12px;border-radius:999px;font-weight:600;animation:pulse 1.6s infinite;}
+
+  .sv-doc{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:13px;margin-bottom:12px;font-size:12px;}
+  .sv-doc .gov{text-align:center;font-size:10.5px;color:var(--ink-soft);border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:8px;font-weight:600;}
+  .sv-row{display:flex;justify-content:space-between;padding:3px 0;}
+  .sv-row span{color:var(--ink-faint);} .sv-row b{font-weight:600;font-variant-numeric:tabular-nums;}
+  .sv-declare{font-size:11.5px;color:var(--ink-soft);background:var(--surface-2);border-radius:8px;padding:9px 11px;margin-bottom:11px;line-height:1.5;}
+  .sig-label{font-size:13px;font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:7px;}
+  .sig-label svg{width:16px;height:16px;stroke:var(--accent);}
+  .pad-wrap{position:relative;background:var(--surface);border:2px dashed var(--line);border-radius:11px;overflow:hidden;touch-action:none;}
+  canvas#pad{display:block;width:100%;height:150px;}
+  .pad-ph{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;color:var(--ink-faint);font-size:13px;font-weight:500;}
+  .pad-line{position:absolute;bottom:26px;right:16px;left:16px;border-bottom:1.5px solid var(--line);}
+  .pad-x{position:absolute;bottom:20px;right:14px;color:var(--ink-faint);font-size:15px;font-weight:700;}
+  .sv-actions{display:flex;gap:9px;margin-top:12px;}
+  .sv-actions .btn{font-size:14px;padding:11px 14px;} .sv-actions .btn.clr{flex:none;width:auto;padding:11px 15px;}
+
+  .ph-success{margin:auto;text-align:center;padding:26px 18px;animation:pop .4s;}
+  .succ-ring{width:66px;height:66px;border-radius:50%;background:var(--ok-soft);display:grid;place-items:center;margin:0 auto 14px;}
+  .succ-ring svg{width:34px;height:34px;stroke:var(--ok);}
+  .ph-success h3{margin:0 0 5px;font-size:17px;} .ph-success p{margin:0;color:var(--ink-soft);font-size:13px;}
+
+  .foot{margin-top:26px;font-size:12.5px;color:var(--ink-faint);text-align:center;line-height:1.6;}
+  .foot b{color:var(--ink-soft);font-weight:600;}
+  .reset{background:none;border:none;color:var(--accent);cursor:pointer;font-family:inherit;font-weight:600;font-size:12.5px;text-decoration:underline;}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg>
+    </div>
+    <div class="brand">
+      <h1>טופס חותם</h1>
+      <p>מילוי אוטומטי של דוח ביצוע טיפולים + חתימת מטופל דיגיטלית</p>
+    </div>
+    <div class="demo-flag"><span class="dot"></span>אב-טיפוס להדגמה</div>
+  </header>
+
+  <div class="steps" id="steps">
+    <div class="step active" data-s="1"><span class="n">1</span>בחירת מטופל</div>
+    <div class="step" data-s="2"><span class="n">2</span>מילוי אוטומטי</div>
+    <div class="step" data-s="3"><span class="n">3</span>שליחה לחתימה</div>
+    <div class="step" data-s="4"><span class="n">4</span>חתום ✓</div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-h">
+        <h2>עמדת המטפלת</h2>
+        <span class="k">שירלי מדמון ריבל · מכון פיזיותרפיה</span>
+      </div>
+      <div class="card-b">
+
+        <!-- STAGE 0: choice -->
+        <div id="stageChoice">
+          <div class="choice">
+            <div class="choice-card" id="goNew">
+              <div class="choice-ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 001 1h4"/><path d="M5 3h9l5 5v11a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/><path d="M12 11v6m-3-3h6"/></svg></div>
+              <div class="t">מטופל חדש</div>
+              <div class="s">העלאת הפניה חדשה ממשרד הביטחון — נפתחת רשומה חדשה</div>
+            </div>
+            <div class="choice-card" id="goExisting">
+              <div class="choice-ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6m3-3h-6"/></svg></div>
+              <div class="t">מטופל קיים</div>
+              <div class="s">המשך טיפול — בחירה מהרשימה או העלאת טופס קיים</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STAGE new upload -->
+        <div id="stageNew" hidden>
+          <button class="back" data-back><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>חזרה</button>
+          <div class="drop" id="dropNew" tabindex="0" role="button" aria-label="העלאת הפניה">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0L8 8m4-4l4 4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+            <div class="t">גררו לכאן את ההפניה של משרד הביטחון</div>
+            <div class="s">קובץ PDF · או לחצו לבחירה</div>
+            <div class="file" id="fileTagNew" hidden></div>
+          </div>
+          <div class="hint">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5m0 3h.01" stroke-linecap="round"/></svg>
+            <span>המערכת קוראת את ההפניה ושולפת לבד את פרטי המטופל, מספר ההפניה, סוג הטיפול והטלפון.</span>
+          </div>
+        </div>
+
+        <!-- STAGE existing -->
+        <div id="stageExisting" hidden>
+          <button class="back" data-back><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>חזרה</button>
+          <div style="font-weight:700;font-size:14.5px;margin-bottom:10px;">בחרו מטופל להמשך טיפול</div>
+          <div class="plist" id="plist"></div>
+          <div class="divider">או</div>
+          <div class="drop" id="dropExisting" tabindex="0" role="button" aria-label="העלאת טופס קיים">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 001 1h4"/><path d="M5 3h9l5 5v11a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
+            <div class="t">העלאת דוח קיים (עם טיפולים קודמים)</div>
+            <div class="s">למטופלים ותיקים שהיסטוריית הטיפולים שלהם נשמרה כקובץ</div>
+            <div class="file" id="fileTagExisting" hidden></div>
+          </div>
+        </div>
+
+        <!-- STAGE data / report -->
+        <div id="stageData" hidden>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button class="back" id="backToStart"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>מטופל אחר</button>
+            <button class="back" id="newRefBtn" hidden style="margin-inline-start:auto;color:var(--accent-ink);"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 001 1h4"/><path d="M5 3h9l5 5v11a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/><path d="M12 11v6m-3-3h6"/></svg>הפניה חדשה למטופל זה</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin:8px 0 12px;">
+            <span class="badge-auto" id="srcBadge"></span>
+          </div>
+          <div class="fields" id="fields"></div>
+
+          <div style="margin-top:20px;">
+            <div class="rep-title">דוח ביצוע טיפולים למטופל <span class="count" id="repCount"></span></div>
+            <div class="rep-head" id="repHead"></div>
+            <div class="tbl-scroll">
+              <table>
+                <thead><tr>
+                  <th>#</th><th>מס' הפניה</th><th>תאריך</th><th>טיפולים</th><th>סוג הטיפול</th><th>מק"ט</th><th class="sig-cell">חתימת המטופל</th>
+                </tr></thead>
+                <tbody id="rows"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-wa" id="sendBtn">
+              <svg viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2zm5.8 14.13c-.24.68-1.42 1.31-1.95 1.35-.5.05-.99.24-3.35-.7-2.82-1.11-4.6-3.99-4.74-4.18-.14-.19-1.13-1.5-1.13-2.86s.72-2.03.97-2.31c.26-.28.56-.35.75-.35.19 0 .37 0 .53.01.17.01.4-.06.62.48.24.56.81 1.94.88 2.08.07.14.12.31.02.5-.09.19-.14.31-.28.48-.14.17-.29.37-.42.5-.14.14-.28.29-.12.56.16.28.72 1.18 1.54 1.91 1.06.94 1.95 1.24 2.23 1.38.28.14.44.12.6-.07.16-.19.69-.8.87-1.08.18-.28.37-.23.62-.14.25.09 1.61.76 1.89.9.28.14.46.21.53.32.07.12.07.66-.17 1.34z"/></svg>
+              שליחה בוואטסאפ לחתימה
+            </button>
+            <button class="btn btn-ghost" id="addBtn" title="הוספת טיפול נוסף (תאריך היום)">+ טיפול נוסף</button>
+          </div>
+          <div class="hint" id="wsHint">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5m0 3h.01" stroke-linecap="round"/></svg>
+            <span>ההודעה תישלח למספר <b id="phoneEcho"></b> שנשלף מההפניה. הלקוח פותח קישור, חותם באצבע — והשורה מתעדכנת כאן אוטומטית.</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="notch"></div>
+          <div class="ph-status"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="ph-body" id="phBody">
+            <div class="ph-idle ph-pad" id="phIdle">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M11 18h2"/></svg>
+              <div class="t">הטלפון של הלקוח</div>
+              <div style="font-size:12px;margin-top:4px;">ההודעה תופיע כאן לאחר השליחה</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p style="text-align:center;font-size:12px;color:var(--ink-faint);margin-top:12px;">סימולציה של מכשיר הלקוח</p>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>אב-טיפוס להדגמת הזרימה.</b> ההודעה כאן מדומה · במערכת אמיתית תתחבר לוואטסאפ (wa.me / Business API) והטופס החתום יישמר כ-PDF.<br>
+    <button class="reset" id="resetBtn">↺ התחלה מחדש</button>
+  </div>
+</div>
+
+<script>
+  const T = window.pdfjsLib;
+  if (T) T.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const $ = s => document.querySelector(s);
+
+  function todayStr(){ const d=new Date(); return fmt(d); }
+  function fmt(d){ return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }
+  function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return fmt(d); }
+
+  // hand-drawn signature svg for prior (already-signed) rows
+  const SIGS = [
+    "M2 20 C10 6 16 30 24 14 S38 4 52 18 60 26 74 12",
+    "M2 16 C12 24 20 4 30 18 S48 28 60 10 78 20 88 14",
+    "M3 18 C9 8 18 26 27 12 S42 22 55 8 70 24 84 14",
+    "M2 22 C14 10 22 26 34 12 S50 6 64 22 80 12 90 20"
+  ];
+  function sigSvg(i){ return `<svg class="sig-svg" viewBox="0 0 92 30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${SIGS[i%SIGS.length]}"/></svg>`; }
+
+  // ---- baseline for the sample MoD referral ----
+  const DEMO = {
+    lastName:"אליהו", firstName:"יעקב יהב", file:"722163003", id:"313474850",
+    address:"הא באייר, ראש העין 4805023", phone:"0584067094",
+    referral:"900000027238", treatment:"סל טיפול פיזיותרפיה", catalog:"57894",
+    qty:"24", validFrom:"08/09/2026", validTo:"08/12/2026", provider:"שירלי מדמון ריבל",
+    prior:[]
+  };
+
+  // ---- sample existing patients (with prior treatments) ----
+  const PATIENTS = [
+    {...DEMO, firstName:"יעקב יהב", lastName:"אליהו", id:"313474850", referral:"900000027238",
+      phone:"0584067094", qty:"24",
+      prior:[{date:daysAgo(21)},{date:daysAgo(14)},{date:daysAgo(7)}]},
+    {lastName:"כהן", firstName:"מרים", file:"810452213", id:"205558974",
+      address:"ויצמן 12, פתח תקווה 4930112", phone:"0525549871",
+      referral:"900000031002", treatment:"סל טיפול פיזיותרפיה", catalog:"57894",
+      qty:"18", validFrom:"01/08/2026", validTo:"01/11/2026", provider:"שירלי מדמון ריבל",
+      prior:[{date:daysAgo(35)},{date:daysAgo(28)},{date:daysAgo(21)},{date:daysAgo(14)},{date:daysAgo(9)},{date:daysAgo(4)},{date:daysAgo(1)}]},
+    {lastName:"לוי", firstName:"דוד", file:"640119302", id:"059887413",
+      address:"הרצל 3, ראשון לציון 7521001", phone:"0547781220",
+      referral:"900000028876", treatment:"סל טיפול פיזיותרפיה", catalog:"57894",
+      qty:"12", validFrom:"20/08/2026", validTo:"20/11/2026", provider:"שירלי מדמון ריבל",
+      prior:[{date:daysAgo(6)}]}
+  ];
+
+  let data = null;
+
+  // ---- PDF parse (best-effort; merges confident hits over baseline) ----
+  async function parsePdf(file){
+    const out = {...DEMO, prior:[]};
+    try{
+      const buf = await file.arrayBuffer();
+      const pdf = await T.getDocument({data:buf}).promise;
+      let text="";
+      for(let p=1;p<=pdf.numPages;p++){ const pg=await pdf.getPage(p); const c=await pg.getTextContent(); text+=" "+c.items.map(i=>i.str).join(" "); }
+      const phones = text.match(/0\d{1,2}-?\d{7}/g)||[];
+      const ids = text.match(/\b\d{9}\b/g)||[];
+      const ref = text.match(/\b\d{12}\b/g); if(ref) out.referral=ref[0];
+      if(ids.length>=2){ out.file=ids[0]; out.id=ids[1]; } else if(ids.length===1){ out.id=ids[0]; }
+      const mob = phones.map(p=>p.replace("-","")).filter(p=>/^05/.test(p)); if(mob.length) out.phone=mob[mob.length-1];
+      const cat = text.match(/\b\d{5}\b/); if(cat) out.catalog=cat[0];
+    }catch(e){}
+    return out;
+  }
+
+  function goStep(n){ document.querySelectorAll(".step").forEach(s=>{const i=+s.dataset.s;
+    s.classList.toggle("active",i===n); s.classList.toggle("done",i<n);}); }
+  function show(id){ ["stageChoice","stageNew","stageExisting","stageData"].forEach(s=>$("#"+s).hidden=(s!==id)); }
+
+  // ---- render ----
+  function render(source){
+    $("#srcBadge").innerHTML = source==="new"
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>זוהה אוטומטית מתוך ההפניה`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-6.2-8.5"/><path d="M21 4v5h-5"/></svg>המשך טיפול · רשומה קיימת`;
+    const F=[["שם משפחה",data.lastName,false],["שם פרטי",data.firstName,false],
+      ["מספר תיק",data.file,true],["תעודת זהות",data.id,true],
+      ["כתובת",data.address,false],["טלפון המטופל",data.phone,true],
+      ["מספר הפניה",data.referral,true],["סוג הטיפול",data.treatment,false]];
+    $("#fields").innerHTML = F.map(([l,v,n])=>`<div class="fld"><div class="l">${l}</div><div class="v ${n?'num':''}">${v}</div></div>`).join("");
+    $("#repHead").innerHTML =
+      `<div class="pair"><span>מטופל/ת: </span><b>${data.firstName} ${data.lastName}</b></div>`+
+      `<div class="pair"><span>ת.ז: </span><b>${data.id}</b></div>`+
+      `<div class="pair"><span>תוקף: </span><b>${data.validFrom}–${data.validTo}</b></div>`+
+      `<div class="pair"><span>מאושר: </span><b>${data.qty} טיפולים</b></div>`;
+    $("#phoneEcho").textContent = data.phone;
+    $("#newRefBtn").hidden = (source==="new");
+    // prior rows
+    $("#rows").innerHTML="";
+    data.prior.forEach((p,i)=>{
+      const tr=document.createElement("tr"); tr.className="prior";
+      tr.innerHTML=`<td class="idx">${i+1}</td><td class="num">${data.referral}</td><td>${p.date}</td>`+
+        `<td style="text-align:center">1</td><td>${data.treatment}</td><td class="num">${data.catalog}</td>`+
+        `<td class="sig-cell">${sigSvg(i)}</td>`;
+      $("#rows").appendChild(tr);
+    });
+    updateCount();
+    addRow();
+  }
+  function updateCount(){
+    const done=$("#rows").querySelectorAll("tr.prior, tr.signed").length;
+    $("#repCount").textContent = `בוצעו ${done} מתוך ${data.qty}`;
+  }
+
+  let pendingCell=null;
+  function addRow(){
+    const i=$("#rows").children.length;
+    const tr=document.createElement("tr"); tr.className="newrow";
+    tr.innerHTML=`<td class="idx">${i+1}</td><td class="num">${data.referral}</td><td class="today">${todayStr()}</td>`+
+      `<td style="text-align:center">1</td><td>${data.treatment}</td><td class="num">${data.catalog}</td>`+
+      `<td class="sig-cell"><span class="sig-pending"><span class="pulse"></span>ממתין לחתימה</span></td>`;
+    $("#rows").appendChild(tr);
+    pendingCell = tr.querySelector(".sig-cell");
+    return pendingCell;
+  }
+
+  // ---- entry routing ----
+  $("#goNew").onclick = ()=>{ show("stageNew"); };
+  $("#goExisting").onclick = ()=>{ renderPlist(); show("stageExisting"); };
+  document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>{ goStep(1); show("stageChoice"); });
+  $("#backToStart").onclick = ()=>{ resetSoft(); show("stageChoice"); };
+
+  function renderPlist(){
+    $("#plist").innerHTML = PATIENTS.map((p,idx)=>{
+      const init=(p.firstName[0]||"")+(p.lastName[0]||"");
+      return `<div class="pcard" data-p="${idx}">
+        <div class="pav">${init}</div>
+        <div class="info"><div class="nm">${p.firstName} ${p.lastName}</div>
+          <div class="meta">ת.ז ${p.id} · הפניה ${p.referral}</div></div>
+        <div class="prog"><b>${p.prior.length}</b>/${p.qty}<br><span style="font-size:11px">טיפולים</span></div>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>`;
+    }).join("");
+    $("#plist").querySelectorAll(".pcard").forEach(c=>c.onclick=()=>{
+      data = JSON.parse(JSON.stringify(PATIENTS[+c.dataset.p]));
+      goStep(2); render("existing"); show("stageData");
+    });
+  }
+
+  // ---- uploads ----
+  function wireDrop(dropEl, tagEl, onFile){
+    const input=document.createElement("input"); input.type="file"; input.accept="application/pdf"; input.hidden=true;
+    document.body.appendChild(input);
+    dropEl.onclick=()=>input.click();
+    dropEl.onkeydown=e=>{ if(e.key==="Enter"||e.key===" ") input.click(); };
+    ["dragover","dragenter"].forEach(ev=>dropEl.addEventListener(ev,e=>{e.preventDefault();dropEl.classList.add("over");}));
+    ["dragleave","drop"].forEach(ev=>dropEl.addEventListener(ev,e=>{e.preventDefault();dropEl.classList.remove("over");}));
+    dropEl.addEventListener("drop",e=>{ if(e.dataTransfer.files[0]){tag(e.dataTransfer.files[0]);onFile(e.dataTransfer.files[0]);} });
+    input.onchange=()=>{ if(input.files[0]){tag(input.files[0]);onFile(input.files[0]);} };
+    function tag(f){ tagEl.hidden=false; tagEl.textContent="📄 "+f.name; }
+  }
+  wireDrop($("#dropNew"), $("#fileTagNew"), async file=>{
+    goStep(2); data=await parsePdf(file); render("new"); setTimeout(()=>show("stageData"),250);
+  });
+  wireDrop($("#dropExisting"), $("#fileTagExisting"), async file=>{
+    goStep(2); data=await parsePdf(file);
+    // an uploaded existing form is assumed to already carry history
+    data.prior=[{date:daysAgo(14)},{date:daysAgo(7)}];
+    render("existing"); setTimeout(()=>show("stageData"),250);
+  });
+
+  $("#addBtn").onclick=()=>{ addRow(); updateCount(); };
+
+  // ---- new referral for an existing patient (keeps identity, fresh count) ----
+  const newRefInput=document.createElement("input");
+  newRefInput.type="file"; newRefInput.accept="application/pdf"; newRefInput.hidden=true;
+  document.body.appendChild(newRefInput);
+  $("#newRefBtn").onclick=()=>newRefInput.click();
+  newRefInput.onchange=async()=>{
+    if(!newRefInput.files[0]) return;
+    const keep={lastName:data.lastName,firstName:data.firstName,file:data.file,id:data.id,
+      address:data.address,phone:data.phone,provider:data.provider};
+    const parsed=await parsePdf(newRefInput.files[0]);
+    // identity stays; referral details come from the new PDF; history resets
+    data={...parsed,...keep,referral:parsed.referral,treatment:parsed.treatment,
+      catalog:parsed.catalog,qty:parsed.qty,validFrom:parsed.validFrom,validTo:parsed.validTo,prior:[]};
+    goStep(2); render("existing"); newRefInput.value="";
+  };
+
+  // ---- send via WhatsApp (simulated) ----
+  $("#sendBtn").onclick=()=>{
+    goStep(3);
+    if(!pendingCell || !pendingCell.querySelector(".sig-pending")) addRow();
+    showWa(); $("#sendBtn").disabled=true; $("#sendBtn").innerHTML="נשלח בוואטסאפ ✓ — ממתין לחתימה";
+  };
+
+  const body=$("#phBody");
+  function showWa(){
+    body.innerHTML=`
+      <div class="wa-head">
+        <div class="wa-av"><svg viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2z"/></svg></div>
+        <div><div class="nm">מכון פיזיותרפיה</div><div class="sub">מקוון</div></div>
+      </div>
+      <div class="wa-chat">
+        <div class="wa-bubble">שלום ${data.firstName} 👋<br>לחתימה על אישור הטיפול מהיום (${todayStr()}) — לחצו על הקישור:
+          <span class="lnk" id="waLink">🔗 sign.clinic.co.il/s/${Math.random().toString(36).slice(2,8)}</span>
+          <div class="wa-time">${new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})} ✓✓</div>
+        </div>
+        <div class="tap-cue">👆 הלקוח לוחץ על הקישור</div>
+      </div>`;
+    $("#waLink").onclick=showSigning;
+  }
+
+  function showSigning(){
+    body.innerHTML=`<div class="ph-pad">
+      <div class="sv-doc">
+        <div class="gov">מדינת ישראל · משרד הביטחון · אגף השיקום</div>
+        <div class="sv-row"><span>מטופל/ת</span><b>${data.firstName} ${data.lastName}</b></div>
+        <div class="sv-row"><span>ת.ז</span><b>${data.id}</b></div>
+        <div class="sv-row"><span>מס' הפניה</span><b>${data.referral}</b></div>
+        <div class="sv-row"><span>סוג הטיפול</span><b>${data.treatment}</b></div>
+        <div class="sv-row"><span>תאריך הטיפול</span><b style="color:var(--accent-ink)">${todayStr()}</b></div>
+      </div>
+      <div class="sv-declare">אני החתום/ה מטה מאשר/ת כי קיבלתי את הטיפול המפורט לעיל בתאריך זה.</div>
+      <div class="sig-label"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21s5-1 8-4 5-8 5-8"/><path d="M14 5l3 3"/></svg>חתמו כאן באצבע</div>
+      <div class="pad-wrap"><canvas id="pad"></canvas><div class="pad-ph" id="padPh">✍️ חתימה</div><div class="pad-line"></div><div class="pad-x">✕</div></div>
+      <div class="sv-actions"><button class="btn btn-ghost clr" id="clrBtn">נקה</button><button class="btn btn-ok" id="okBtn" disabled>אישור ושליחה</button></div>
+    </div>`;
+    initPad();
+  }
+
+  function initPad(){
+    const cv=$("#pad"), ctx=cv.getContext("2d"), ratio=window.devicePixelRatio||1;
+    const r=cv.getBoundingClientRect(); cv.width=r.width*ratio; cv.height=r.height*ratio; ctx.scale(ratio,ratio);
+    ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()||"#1a2233";
+    ctx.lineWidth=2.4; ctx.lineCap="round"; ctx.lineJoin="round";
+    let drawing=false, drew=false, last=null;
+    const pos=e=>{const b=cv.getBoundingClientRect(); const t=e.touches?e.touches[0]:e; return {x:t.clientX-b.left,y:t.clientY-b.top};};
+    const start=e=>{e.preventDefault();drawing=true;last=pos(e);};
+    const move=e=>{if(!drawing)return;e.preventDefault();const p=pos(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p;
+      if(!drew){drew=true;$("#padPh").hidden=true;$("#okBtn").disabled=false;}};
+    const end=()=>{drawing=false;};
+    cv.addEventListener("mousedown",start);cv.addEventListener("mousemove",move);window.addEventListener("mouseup",end);
+    cv.addEventListener("touchstart",start,{passive:false});cv.addEventListener("touchmove",move,{passive:false});cv.addEventListener("touchend",end);
+    $("#clrBtn").onclick=()=>{ctx.clearRect(0,0,cv.width,cv.height);drew=false;$("#padPh").hidden=false;$("#okBtn").disabled=true;};
+    $("#okBtn").onclick=()=>confirmSign(cv.toDataURL("image/png"));
+  }
+
+  function confirmSign(dataUrl){
+    if(pendingCell){
+      const tr=pendingCell.closest("tr"); tr.classList.remove("newrow"); tr.classList.add("signed");
+      pendingCell.innerHTML=`<img class="sig-img" src="${dataUrl}" alt="חתימת המטופל"><span class="sig-done"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>חתום ${todayStr()}</span>`;
+    }
+    updateCount(); goStep(4);
+    const sb=$("#sendBtn"); sb.innerHTML="✓ הטופס נחתם ונשמר"; sb.classList.remove("btn-wa"); sb.classList.add("btn-ok");
+    body.innerHTML=`<div class="ph-success ph-pad"><div class="succ-ring"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+      <h3>החתימה נשלחה</h3><p>תודה ${data.firstName}. אישור הטיפול מהיום נשמר ונשלח למטפלת.</p></div>`;
+  }
+
+  // ---- reset ----
+  function resetSoft(){
+    data=null; pendingCell=null; goStep(1);
+    const sb=$("#sendBtn"); sb.disabled=false; sb.classList.add("btn-wa"); sb.classList.remove("btn-ok");
+    sb.innerHTML=`<svg viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2zm5.8 14.13c-.24.68-1.42 1.31-1.95 1.35-.5.05-.99.24-3.35-.7-2.82-1.11-4.6-3.99-4.74-4.18-.14-.19-1.13-1.5-1.13-2.86s.72-2.03.97-2.31c.26-.28.56-.35.75-.35.19 0 .37 0 .53.01.17.01.4-.06.62.48.24.56.81 1.94.88 2.08.07.14.12.31.02.5-.09.19-.14.31-.28.48-.14.17-.29.37-.42.5-.14.14-.28.29-.12.56.16.28.72 1.18 1.54 1.91 1.06.94 1.95 1.24 2.23 1.38.28.14.44.12.6-.07.16-.19.69-.8.87-1.08.18-.28.37-.23.62-.14.25.09 1.61.76 1.89.9.28.14.46.21.53.32.07.12.07.66-.17 1.34z"/></svg>שליחה בוואטסאפ לחתימה`;
+    $("#fileTagNew").hidden=true; $("#fileTagExisting").hidden=true; $("#rows").innerHTML="";
+    body.innerHTML=`<div class="ph-idle ph-pad"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M11 18h2"/></svg><div class="t">הטלפון של הלקוח</div><div style="font-size:12px;margin-top:4px;">ההודעה תופיע כאן לאחר השליחה</div></div>`;
+  }
+  $("#resetBtn").onclick=()=>{ resetSoft(); show("stageChoice"); };
+</script>

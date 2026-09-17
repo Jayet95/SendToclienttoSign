@@ -1,0 +1,23 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# node (for future backend)
+node_modules/
+npm-debug.log*
+.env
+.env.*
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# local scratch — do NOT commit patient PDFs / PHI
+*.pdf
+_pdf_text.txt
+tmp/
