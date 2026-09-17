@@ -775,7 +775,7 @@
       if(!res.ok) throw new Error("create failed");
       const s=await res.json();
       currentSessionId=s.id;
-      showWaReal(s.waLink, s.signUrl, data.phone);
+      showWaReal(s.waLink, s.signUrl, data.phone, dateTxt);
       try{ window.open(s.waLink, "_blank"); }catch(e){}  // open WhatsApp for the therapist to hit send
       startPolling(s.id);
       $("#sendBtn").innerHTML=WA_ICON+"שליחה חוזרת לחתימה";
@@ -799,15 +799,16 @@
   function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
 
   // real-mode phone view: shows the actual link + a button to open WhatsApp
-  function showWaReal(waLink, signUrl, phone){
+  function showWaReal(waLink, signUrl, phone, dateTxt){
+    // preview the EXACT plain-text message WhatsApp will send (URL auto-links there)
     body.innerHTML=`
       <div class="wa-head">
         <div class="wa-av"><svg viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2z"/></svg></div>
         <div><div class="nm">אל: ${phone||"המטופל"}</div><div class="sub">קישור אמיתי · ממתין לחתימה</div></div>
       </div>
       <div class="wa-chat">
-        <div class="wa-bubble">שלום ${data.firstName} 👋<br>לחתימה על אישור הטיפול מהיום — לחצו:
-          <a class="lnk" href="${signUrl}" target="_blank" rel="noopener">🔗 פתח דף חתימה</a>
+        <div class="wa-bubble">שלום ${data.firstName}, לחתימה על אישור הטיפול מהיום (${dateTxt}):<br>
+          <a class="lnk" href="${signUrl}" target="_blank" rel="noopener" style="direction:ltr;unicode-bidi:embed;">${signUrl}</a>
           <div class="wa-time">${new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})} ✓</div>
         </div>
         <a class="btn btn-wa" href="${waLink}" target="_blank" rel="noopener" style="text-decoration:none;align-self:center;width:auto;padding:9px 16px;font-size:13px;">${WA_ICON}פתח וואטסאפ לשליחה</a>
