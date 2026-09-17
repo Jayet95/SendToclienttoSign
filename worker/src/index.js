@@ -45,6 +45,11 @@ export default {
         return cors(env, await sendWhatsApp(request, env));
       }
 
+      // POST /api/sms  -> send the link over SMS via an Android SMS gateway
+      if (pathname === "/api/sms" && method === "POST") {
+        return cors(env, await sendSms(request, env));
+      }
+
       // GET /s/:id  -> the patient-facing signing page
       m = pathname.match(/^\/s\/([A-Za-z0-9_-]+)$/);
       if (m && method === "GET") {
@@ -164,6 +169,34 @@ async function sendWhatsApp(request, env) {
 
   // Fallback: return a click-to-chat link the clinic can open.
   return json({ sent: false, via: "wa_me", waLink: waMeLink(phone, text) });
+}
+
+// Send SMS through an Android SMS gateway (sms-gate.app cloud mode).
+// Set the credentials as secrets:
+//   npx wrangler secret put SMS_GATEWAY_USER
+//   npx wrangler secret put SMS_GATEWAY_PASSWORD
+async function sendSms(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const phone = normalizePhone(body.phone);
+  const text = body.message || "";
+  if (!phone) return json({ error: "invalid_phone" }, 400);
+
+  if (!env.SMS_GATEWAY_USER || !env.SMS_GATEWAY_PASSWORD) {
+    return json({
+      sent: false,
+      reason: "not_configured",
+      message: "שער ה-SMS עדיין לא מוגדר. התקינו את sms-gate.app במצב ענן והגדירו את הפרטים ב-Worker.",
+    });
+  }
+
+  const auth = "Basic " + btoa(`${env.SMS_GATEWAY_USER}:${env.SMS_GATEWAY_PASSWORD}`);
+  const res = await fetch("https://api.sms-gate.app/3rdparty/v1/message", {
+    method: "POST",
+    headers: { Authorization: auth, "Content-Type": "application/json" },
+    body: JSON.stringify({ message: text, phoneNumbers: ["+" + phone] }),
+  });
+  const data = await res.json().catch(() => ({}));
+  return json({ sent: res.ok, via: "sms_gateway", response: data }, res.ok ? 200 : 502);
 }
 
 /* ------------------------- signing page ------------------------- */
