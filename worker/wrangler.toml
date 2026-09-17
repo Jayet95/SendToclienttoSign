@@ -23,6 +23,8 @@ CLINIC_NAME = "מכון פיזיותרפיה — שירלי מדמון ריבל"
 # Allowed origin for the Pages site that calls this Worker.
 # Use "*" while developing; set your Pages URL in production.
 ALLOWED_ORIGIN = "*"
+# Clerk issuer (from the publishable key domain) — used to verify session JWTs.
+CLERK_ISSUER = "https://smiling-grub-8697.clerk.accounts.dev"
 
 # WhatsApp Business API — set these as SECRETS (never commit tokens):
 #   npx wrangler secret put WHATSAPP_TOKEN

@@ -23,9 +23,11 @@ export default {
     if (method === "OPTIONS") return cors(env, new Response(null, { status: 204 }));
 
     try {
-      // POST /api/sessions  -> create a signing session
+      // POST /api/sessions  -> create a signing session (therapist action)
       if (pathname === "/api/sessions" && method === "POST") {
-        return cors(env, await createSession(request, env, url));
+        const uid = await verifyClerkToken(request, env);
+        if (!uid) return cors(env, json({ error: "unauthorized" }, 401));
+        return cors(env, await createSession(request, env, url, uid));
       }
 
       // GET /api/sessions/:id  -> read a session (for the clinic)
@@ -56,16 +58,20 @@ export default {
         return cors(env, await sendSms(request, env));
       }
 
-      // --- patient records (D1) ---
-      // GET /api/patients        -> list all patients
+      // --- patient records (D1), scoped to the signed-in Clerk user ---
       if (pathname === "/api/patients" && method === "GET") {
-        return cors(env, await listPatients(env));
+        const uid = await verifyClerkToken(request, env);
+        if (!uid) return cors(env, json({ error: "unauthorized" }, 401));
+        return cors(env, await listPatients(env, uid));
       }
-      // PUT /api/patients/:id    -> create/update a patient
-      // DELETE /api/patients/:id -> remove a patient
       m = pathname.match(/^\/api\/patients\/([^/]+)$/);
-      if (m && method === "PUT") return cors(env, await putPatient(request, env, decodeURIComponent(m[1])));
-      if (m && method === "DELETE") return cors(env, await deletePatient(env, decodeURIComponent(m[1])));
+      if (m && (method === "PUT" || method === "DELETE")) {
+        const uid = await verifyClerkToken(request, env);
+        if (!uid) return cors(env, json({ error: "unauthorized" }, 401));
+        const pid = decodeURIComponent(m[1]);
+        if (method === "PUT") return cors(env, await putPatient(request, env, uid, pid));
+        return cors(env, await deletePatient(env, uid, pid));
+      }
 
       // GET /s/:id  -> the patient-facing signing page
       m = pathname.match(/^\/s\/([A-Za-z0-9_-]+)$/);
@@ -87,7 +93,7 @@ export default {
 
 /* ------------------------- handlers ------------------------- */
 
-async function createSession(request, env, url) {
+async function createSession(request, env, url, uid) {
   const body = await request.json().catch(() => ({}));
   const patient = body.patient || {};
   if (!patient.id || !(patient.firstName || patient.lastName)) {
@@ -115,6 +121,7 @@ async function createSession(request, env, url) {
       date: body.date || todayISO(),
     },
     clinic: env.CLINIC_NAME || "מכון פיזיותרפיה",
+    owner: uid || null,
   };
   await env.SESSIONS.put(id, JSON.stringify(session), { expirationTtl: SESSION_TTL });
 
@@ -161,30 +168,81 @@ async function signSession(request, env, id) {
 
 /* ------------------------- patient records (D1) ------------------------- */
 
-async function listPatients(env) {
+async function listPatients(env, uid) {
   const { results } = await env.DB.prepare(
-    "SELECT doc FROM patients ORDER BY updated_at DESC"
-  ).all();
+    "SELECT doc FROM patients WHERE user_id = ?1 ORDER BY updated_at DESC"
+  ).bind(uid).all();
   const patients = (results || [])
     .map((r) => { try { return JSON.parse(r.doc); } catch { return null; } })
     .filter(Boolean);
   return json({ patients });
 }
 
-async function putPatient(request, env, id) {
+async function putPatient(request, env, uid, id) {
   const doc = await request.json().catch(() => null);
   if (!doc || typeof doc !== "object") return json({ error: "invalid_doc" }, 400);
   doc.id = id; // keep the key and the document in sync
   await env.DB.prepare(
-    "INSERT INTO patients (id, doc, updated_at) VALUES (?1, ?2, ?3) " +
-    "ON CONFLICT(id) DO UPDATE SET doc = ?2, updated_at = ?3"
-  ).bind(id, JSON.stringify(doc), new Date().toISOString()).run();
+    "INSERT INTO patients (user_id, id, doc, updated_at) VALUES (?1, ?2, ?3, ?4) " +
+    "ON CONFLICT(user_id, id) DO UPDATE SET doc = ?3, updated_at = ?4"
+  ).bind(uid, id, JSON.stringify(doc), new Date().toISOString()).run();
   return json({ ok: true });
 }
 
-async function deletePatient(env, id) {
-  await env.DB.prepare("DELETE FROM patients WHERE id = ?1").bind(id).run();
+async function deletePatient(env, uid, id) {
+  await env.DB.prepare("DELETE FROM patients WHERE user_id = ?1 AND id = ?2").bind(uid, id).run();
   return json({ ok: true });
+}
+
+/* ------------------------- Clerk auth (verify session JWT) ------------------------- */
+
+let JWKS_CACHE = null, JWKS_AT = 0;
+async function getJwks(env) {
+  const now = Date.now();
+  if (JWKS_CACHE && now - JWKS_AT < 3600_000) return JWKS_CACHE;
+  const res = await fetch(env.CLERK_ISSUER + "/.well-known/jwks.json");
+  const data = await res.json();
+  JWKS_CACHE = data.keys || [];
+  JWKS_AT = now;
+  return JWKS_CACHE;
+}
+function b64urlToBytes(s) {
+  s = s.replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  const bin = atob(s);
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+// returns the Clerk user id (sub) for a valid session token, else null
+async function verifyClerkToken(request, env) {
+  const auth = request.headers.get("Authorization") || "";
+  const m = auth.match(/^Bearer (.+)$/);
+  if (!m || !env.CLERK_ISSUER) return null;
+  const parts = m[1].split(".");
+  if (parts.length !== 3) return null;
+  const [h, p, sig] = parts;
+  let header, payload;
+  try {
+    header = JSON.parse(new TextDecoder().decode(b64urlToBytes(h)));
+    payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(p)));
+  } catch { return null; }
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.exp && now > payload.exp + 5) return null;
+  if (payload.nbf && now < payload.nbf - 5) return null;
+  if (payload.iss && payload.iss !== env.CLERK_ISSUER) return null;
+  try {
+    const jwks = await getJwks(env);
+    const jwk = jwks.find((k) => k.kid === header.kid);
+    if (!jwk) return null;
+    const key = await crypto.subtle.importKey(
+      "jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]
+    );
+    const ok = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5", key, b64urlToBytes(sig), new TextEncoder().encode(h + "." + p)
+    );
+    return ok ? (payload.sub || null) : null;
+  } catch { return null; }
 }
 
 async function cancelSession(env, id) {

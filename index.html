@@ -3,6 +3,10 @@
 <title>טופס חותם</title>
 <meta name="description" content="אב-טיפוס: מילוי אוטומטי של דוח ביצוע טיפולים מהפניית משרד הביטחון וחתימת מטופל דיגיטלית בקישור וואטסאפ.">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script async crossorigin="anonymous"
+  data-clerk-publishable-key="pk_test_c21pbGluZy1ncnViLTg2OTcuY2xlcmsuYWNjb3VudHMuZGV2JA"
+  src="https://smiling-grub-8697.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+  type="text/javascript"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=Assistant:wght@400;500;600;700&display=swap">
@@ -288,8 +292,33 @@
   @media (max-width:520px){.mf{grid-template-columns:1fr;}}
   .mf label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--ink-soft);font-weight:600;}
   .mf .full{grid-column:1/-1;}
+  /* auth gate */
+  .gate{position:fixed;inset:0;z-index:100;background:var(--ground);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:22px;padding:24px;}
+  .gate-brand{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;}
+  .gate-brand .logo{width:56px;height:56px;border-radius:15px;}
+  .gate-brand .logo svg{width:32px;height:32px;}
+  .gate-brand h1{font-size:24px;margin:0;font-weight:700;}
+  .gate-brand p{margin:0;color:var(--ink-soft);font-size:14px;max-width:340px;}
+  .gate-loading{color:var(--ink-soft);font-size:14px;display:flex;align-items:center;gap:9px;}
+  .spin{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+  #userBtn{display:flex;align-items:center;}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 </style>
+
+<!-- therapist sign-in gate (patients never see this) -->
+<div class="gate" id="authGate" hidden>
+  <div class="gate-brand">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg>
+    </div>
+    <h1>טופס חותם</h1>
+    <p>כניסת מטפלים — התחברו כדי לנהל את המטופלים והחתימות שלכם</p>
+  </div>
+  <div id="signinBox"></div>
+  <div class="gate-loading" id="gateLoading"><span class="spin"></span>טוען התחברות…</div>
+</div>
 
 <div class="wrap">
   <header class="top">
@@ -300,7 +329,8 @@
       <h1>טופס חותם</h1>
       <p>מילוי אוטומטי של דוח ביצוע טיפולים + חתימת מטופל דיגיטלית</p>
     </div>
-    <div class="demo-flag"><span class="dot"></span>אב-טיפוס להדגמה</div>
+    <div id="userBtn"></div>
+    <div class="demo-flag" id="demoFlag"><span class="dot"></span>אב-טיפוס להדגמה</div>
   </header>
 
   <div class="steps" id="steps">
@@ -493,12 +523,17 @@
   // Live backend (Cloudflare Worker). Empty string = pure demo (simulated).
   const API_BASE = "https://sign.jayet95.workers.dev";
 
-  // ---- D1 persistence (patient records) ----
+  // ---- auth (Clerk) + D1 persistence (patient records) ----
   let currentSource = "existing";
-  async function apiListPatients(){ const r=await fetch(API_BASE+"/api/patients"); if(!r.ok) throw 0; return (await r.json()).patients||[]; }
-  function apiPutPatient(p){ if(!API_BASE) return; fetch(API_BASE+"/api/patients/"+encodeURIComponent(p.id),
-    {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)}).catch(()=>{}); }
-  function apiDeletePatient(id){ if(!API_BASE) return; fetch(API_BASE+"/api/patients/"+encodeURIComponent(id),{method:"DELETE"}).catch(()=>{}); }
+  let CLERK_ON = false;
+  async function authHeader(){
+    try{ if(CLERK_ON && window.Clerk?.session){ const t=await window.Clerk.session.getToken(); if(t) return {Authorization:"Bearer "+t}; } }catch(e){}
+    return {};
+  }
+  async function apiListPatients(){ const r=await fetch(API_BASE+"/api/patients",{headers:await authHeader()}); if(!r.ok) throw 0; return (await r.json()).patients||[]; }
+  async function apiPutPatient(p){ if(!API_BASE) return; try{ await fetch(API_BASE+"/api/patients/"+encodeURIComponent(p.id),
+    {method:"PUT",headers:{"Content-Type":"application/json",...(await authHeader())},body:JSON.stringify(p)}); }catch(e){} }
+  async function apiDeletePatient(id){ if(!API_BASE) return; try{ await fetch(API_BASE+"/api/patients/"+encodeURIComponent(id),{method:"DELETE",headers:await authHeader()}); }catch(e){} }
   // save the current patient (fields + treatments) to D1 and keep the local list in sync
   function persist(){
     if(!data || !data.id) return;
@@ -812,7 +847,7 @@
       catalog:data.catalog, date:dateTxt };
     $("#sendBtn").innerHTML="יוצר קישור חתימה...";
     try{
-      const res=await fetch(API_BASE+"/api/sessions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      const res=await fetch(API_BASE+"/api/sessions",{method:"POST",headers:{"Content-Type":"application/json",...(await authHeader())},body:JSON.stringify(payload)});
       if(!res.ok) throw new Error("create failed");
       const s=await res.json();
       currentSessionId=s.id;
@@ -1033,13 +1068,40 @@
   }
   $("#resetBtn").onclick=()=>{ resetSoft(); show("stageChoice"); };
 
-  // ---- load patient records from D1 on startup ----
-  (async function initPatients(){
+  // ---- load this user's patient records from D1 (after sign-in) ----
+  async function initPatients(){
     if(!API_BASE) return;
     try{
       const list = await apiListPatients();
-      if(list.length){ PATIENTS.length=0; PATIENTS.push(...list); }   // real data from D1
-      else { PATIENTS.forEach(p=>apiPutPatient(p)); }                 // first run: seed the samples
-    }catch(e){ /* backend unreachable (e.g. blocked network) → keep in-memory samples */ }
-  })();
+      if(list.length){ PATIENTS.length=0; PATIENTS.push(...list); }   // this user's real data
+      else { for(const p of PATIENTS){ await apiPutPatient(p); } }     // first run for this user: seed samples
+    }catch(e){ /* unauthenticated / offline → keep in-memory demo samples */ }
+  }
+
+  // ---- Clerk auth gate: therapists sign in; patients (the /s/:id page) never see this ----
+  function waitForClerk(ms){ return new Promise(res=>{ const t0=Date.now(); (function chk(){ if(window.Clerk&&window.Clerk.load) return res(true); if(Date.now()-t0>ms) return res(false); setTimeout(chk,100); })(); }); }
+  function mountUser(){ const el=$("#userBtn"); if(el&&window.Clerk){ el.innerHTML=""; try{ window.Clerk.mountUserButton(el,{afterSignOutUrl:location.href}); }catch(e){} } }
+  async function boot(){
+    const gate=$("#authGate"); gate.hidden=false;   // cover the app until auth resolves
+    const has=await waitForClerk(4000);
+    if(has){
+      try{
+        await window.Clerk.load();
+        CLERK_ON=true;
+        if(window.Clerk.user){
+          gate.hidden=true; $("#demoFlag").hidden=true;
+          mountUser(); await initPatients();
+        } else {
+          $("#gateLoading").hidden=true;
+          window.Clerk.mountSignIn($("#signinBox"));
+          window.Clerk.addListener(({user})=>{ if(user) location.reload(); });
+        }
+        return;
+      }catch(e){}
+    }
+    // Clerk unavailable (e.g. Claude artifact blocks external scripts) → demo mode, no login
+    gate.hidden=true;
+    await initPatients();
+  }
+  boot();
 </script>
