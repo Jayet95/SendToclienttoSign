@@ -427,7 +427,7 @@
 
           <button class="dl-btn" id="dlBtn" hidden>
             <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
-            הורדת הטופס החתום (PDF)
+            הורדת הטופס (PDF)
           </button>
         </div>
 
@@ -585,7 +585,7 @@
     $("#fields").innerHTML = F.map(([l,k,n])=>`<div class="fld"><div class="l">${l}</div><div class="v ${n?'num':''}" data-k="${k}">${data[k]||""}</div></div>`).join("");
     refreshHeaders();
     $("#newRefBtn").hidden = (source==="new");
-    setEditing(false); armSendBtn(); $("#dlBtn").hidden=true;
+    setEditing(false); armSendBtn(); $("#dlBtn").hidden=false;   // form is downloadable at any stage
     currentSource = source;
     if(!Array.isArray(data.treatments)) data.treatments=[];
     // persisted (signed) treatments — each tagged with its index for delete
