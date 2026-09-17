@@ -1,0 +1,24 @@
+name = "sendtoclient-sign"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# KV namespace that stores signing sessions.
+# Create it once with:
+#   npx wrangler kv namespace create SESSIONS
+#   npx wrangler kv namespace create SESSIONS --preview
+# then paste the returned ids below.
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "REPLACE_WITH_KV_ID"
+preview_id = "REPLACE_WITH_PREVIEW_KV_ID"
+
+[vars]
+CLINIC_NAME = "מכון פיזיותרפיה — שירלי מדמון ריבל"
+# Allowed origin for the Pages site that calls this Worker.
+# Use "*" while developing; set your Pages URL in production.
+ALLOWED_ORIGIN = "*"
+
+# WhatsApp Business API — set these as SECRETS (never commit tokens):
+#   npx wrangler secret put WHATSAPP_TOKEN
+#   npx wrangler secret put WHATSAPP_PHONE_ID
+# When they are absent the Worker falls back to returning a wa.me link.

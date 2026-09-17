@@ -11,6 +11,11 @@ npm-debug.log*
 .env
 .env.*
 
+# cloudflare / wrangler
+.wrangler/
+.dev.vars
+dist/
+
 # python
 __pycache__/
 *.pyc
