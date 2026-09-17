@@ -288,7 +288,7 @@ function html(inner, status = 200) {
   @media(prefers-color-scheme:dark){.declare{background:#1c232f;color:#9aa6b6}}
   .siglabel{font-weight:700;font-size:14px;margin-bottom:8px}
   .padwrap{position:relative;border:2px dashed #cfd5dd;border-radius:12px;overflow:hidden;touch-action:none;background:#fff}
-  @media(prefers-color-scheme:dark){.padwrap{background:#0f151d;border-color:#2a3340}}
+  @media(prefers-color-scheme:dark){.padwrap{border-color:#3a4756}}
   canvas{display:block;width:100%;height:190px}
   .padph{position:absolute;inset:0;display:grid;place-items:center;color:#8b95a4;pointer-events:none;font-size:14px}
   .actions{display:flex;gap:10px;margin-top:12px}
@@ -308,7 +308,7 @@ function html(inner, status = 200) {
   var cv = document.getElementById('pad'); if(!cv) return;
   var ctx = cv.getContext('2d'), ratio = window.devicePixelRatio||1;
   function fit(){ var r=cv.getBoundingClientRect(); cv.width=r.width*ratio; cv.height=r.height*ratio;
-    ctx.scale(ratio,ratio); ctx.strokeStyle=getComputedStyle(document.body).color; ctx.lineWidth=2.4;
+    ctx.scale(ratio,ratio); ctx.strokeStyle='#15233a'; ctx.lineWidth=2.4;
     ctx.lineCap='round'; ctx.lineJoin='round'; }
   fit();
   var drawing=false, drew=false, last=null;
