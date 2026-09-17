@@ -476,7 +476,7 @@
   </div>
 
   <div class="foot">
-    <b>אב-טיפוס להדגמת הזרימה.</b> ההודעה כאן מדומה · במערכת אמיתית תתחבר לוואטסאפ (wa.me / Business API) והטופס החתום יישמר כ-PDF.<br>
+    <b>מחובר ל-backend חי (Cloudflare Worker).</b> "שלח" יוצר קישור חתימה אמיתי ופותח וואטסאפ (wa.me); כשהמטופל חותם — השורה מתעדכנת אוטומטית. אם הרשת חוסמת את השרת, המערכת עוברת למצב דמו.<br>
     <button class="reset" id="resetBtn">↺ התחלה מחדש</button>
   </div>
 </div>
@@ -485,6 +485,9 @@
   const T = window.pdfjsLib;
   if (T) T.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   const $ = s => document.querySelector(s);
+
+  // Live backend (Cloudflare Worker). Empty string = pure demo (simulated).
+  const API_BASE = "https://sendtoclient-sign.jayet95.workers.dev";
 
   function todayStr(){ const d=new Date(); return fmt(d); }
   function fmt(d){ return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }
@@ -748,17 +751,69 @@
     goStep(2); render("existing"); newRefInput.value="";
   };
 
-  // ---- send via WhatsApp (simulated) ----
+  // ---- send via WhatsApp ----
   // As long as the treatment isn't signed, sending is allowed (incl. resend).
-  $("#sendBtn").onclick=()=>{
+  const WA_ICON=`<svg viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2z"/></svg>`;
+  let currentSessionId=null, pollTimer=null;
+
+  $("#sendBtn").onclick=async ()=>{
     if(signed){ alert("הטיפול כבר נחתם — לא ניתן לשלוח שוב."); return; }
     if(editing){ saveEdits(); setEditing(false); }
     goStep(3);
     if(!pendingCell || !pendingCell.querySelector(".sig-pending")) addRow();
-    showWa();
-    // button stays enabled so the therapist can resend until it's signed
-    $("#sendBtn").innerHTML=`<svg viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2z"/></svg>שליחה חוזרת לחתימה`;
+
+    if(!API_BASE){ showWa(); $("#sendBtn").innerHTML=WA_ICON+"שליחה חוזרת לחתימה"; return; }
+
+    // real backend: create a signing session, open WhatsApp, poll for the signature
+    const dateTxt=(pendingCell.closest("tr").children[2].textContent||todayStr()).trim();
+    const payload={ patient:{firstName:data.firstName,lastName:data.lastName,id:data.id,file:data.file,
+      address:data.address,phone:data.phone}, referral:data.referral, treatment:data.treatment,
+      catalog:data.catalog, date:dateTxt };
+    $("#sendBtn").innerHTML="יוצר קישור חתימה...";
+    try{
+      const res=await fetch(API_BASE+"/api/sessions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      if(!res.ok) throw new Error("create failed");
+      const s=await res.json();
+      currentSessionId=s.id;
+      showWaReal(s.waLink, s.signUrl, data.phone);
+      try{ window.open(s.waLink, "_blank"); }catch(e){}  // open WhatsApp for the therapist to hit send
+      startPolling(s.id);
+      $("#sendBtn").innerHTML=WA_ICON+"שליחה חוזרת לחתימה";
+    }catch(e){
+      showWa();  // network blocked (e.g. corporate) → fall back to the local demo
+      $("#sendBtn").innerHTML=WA_ICON+"שליחה חוזרת (דמו)";
+    }
   };
+
+  function startPolling(id){
+    stopPolling();
+    pollTimer=setInterval(async ()=>{
+      try{
+        const r=await fetch(API_BASE+"/api/sessions/"+id);
+        if(!r.ok) return;
+        const s=await r.json();
+        if(s.status==="signed" && s.signature){ stopPolling(); confirmSign(s.signature); }
+      }catch(e){}
+    }, 3500);
+  }
+  function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
+
+  // real-mode phone view: shows the actual link + a button to open WhatsApp
+  function showWaReal(waLink, signUrl, phone){
+    body.innerHTML=`
+      <div class="wa-head">
+        <div class="wa-av"><svg viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2z"/></svg></div>
+        <div><div class="nm">אל: ${phone||"המטופל"}</div><div class="sub">קישור אמיתי · ממתין לחתימה</div></div>
+      </div>
+      <div class="wa-chat">
+        <div class="wa-bubble">שלום ${data.firstName} 👋<br>לחתימה על אישור הטיפול מהיום — לחצו:
+          <a class="lnk" href="${signUrl}" target="_blank" rel="noopener">🔗 פתח דף חתימה</a>
+          <div class="wa-time">${new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})} ✓</div>
+        </div>
+        <a class="btn btn-wa" href="${waLink}" target="_blank" rel="noopener" style="text-decoration:none;align-self:center;width:auto;padding:9px 16px;font-size:13px;">${WA_ICON}פתח וואטסאפ לשליחה</a>
+        <div class="tap-cue" id="waWait">⏳ ממתין לחתימת המטופל...</div>
+      </div>`;
+  }
 
   // ---- manual entry ----
   $("#goManual").onclick=()=>{ show("stageManual"); };
@@ -913,7 +968,7 @@
 
   // ---- reset ----
   function resetSoft(){
-    data=null; pendingCell=null; editing=false; goStep(1);
+    data=null; pendingCell=null; editing=false; stopPolling(); currentSessionId=null; goStep(1);
     armSendBtn();
     $("#dlBtn").hidden=true; $("#apptPanel").hidden=true; $("#apptToggle").setAttribute("aria-expanded","false");
     $("#fileTagNew").hidden=true; $("#fileTagExisting").hidden=true; $("#rows").innerHTML="";
