@@ -603,7 +603,7 @@
       $("#rows").appendChild(tr);
     });
     updateCount();
-    addRow();
+    pendingCell=null;   // no treatment is queued until the user adds or sends one
   }
   function updateCount(){
     const done=$("#rows").querySelectorAll("tr.prior, tr.signed").length;
@@ -860,10 +860,21 @@
 
   // ---- manual entry ----
   $("#goManual").onclick=()=>{ show("stageManual"); };
+
+  // live input filtering: digits-only fields vs. name fields (no digits)
+  ["m_id","m_file","m_phone","m_referral","m_catalog","m_qty"].forEach(id=>{
+    const el=$("#"+id); if(el) el.addEventListener("input",()=>{ const s=el.selectionStart; el.value=el.value.replace(/\D/g,""); try{el.setSelectionRange(s,s);}catch(e){} });
+  });
+  ["m_firstName","m_lastName"].forEach(id=>{
+    const el=$("#"+id); if(el) el.addEventListener("input",()=>{ const s=el.selectionStart; el.value=el.value.replace(/[0-9]/g,""); try{el.setSelectionRange(s,s);}catch(e){} });
+  });
+
   $("#manualCreate").onclick=()=>{
     const g=id=>$("#m_"+id).value.trim();
     if(!g("firstName")&&!g("lastName")){ alert("יש למלא לפחות שם המטופל."); return; }
-    if(!g("id")){ alert("יש למלא תעודת זהות."); return; }
+    if(!/^\d{9}$/.test(g("id"))){ alert("תעודת זהות חייבת להיות 9 ספרות."); return; }
+    if(g("phone") && !/^0\d{8,9}$/.test(g("phone"))){ alert("מספר טלפון לא תקין — ספרות בלבד, למשל 0501234567."); return; }
+    if(g("qty") && !/^\d+$/.test(g("qty"))){ alert("כמות טיפולים חייבת להיות מספר."); return; }
     data={ firstName:g("firstName"), lastName:g("lastName"), id:g("id"), file:g("file"),
       phone:g("phone"), referral:g("referral")||"—", treatment:g("treatment")||"סל טיפול פיזיותרפיה",
       catalog:g("catalog")||"—", address:g("address"), qty:g("qty")||"24",
