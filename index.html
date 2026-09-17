@@ -489,6 +489,21 @@
   // Live backend (Cloudflare Worker). Empty string = pure demo (simulated).
   const API_BASE = "https://sign.jayet95.workers.dev";
 
+  // ---- D1 persistence (patient records) ----
+  let currentSource = "existing";
+  async function apiListPatients(){ const r=await fetch(API_BASE+"/api/patients"); if(!r.ok) throw 0; return (await r.json()).patients||[]; }
+  function apiPutPatient(p){ if(!API_BASE) return; fetch(API_BASE+"/api/patients/"+encodeURIComponent(p.id),
+    {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)}).catch(()=>{}); }
+  function apiDeletePatient(id){ if(!API_BASE) return; fetch(API_BASE+"/api/patients/"+encodeURIComponent(id),{method:"DELETE"}).catch(()=>{}); }
+  // save the current patient (fields + treatments) to D1 and keep the local list in sync
+  function persist(){
+    if(!data || !data.id) return;
+    const snap=JSON.parse(JSON.stringify(data));
+    const i=PATIENTS.findIndex(p=>p.id===data.id);
+    if(i>=0) PATIENTS[i]=snap; else PATIENTS.push(snap);
+    apiPutPatient(snap);
+  }
+
   function todayStr(){ const d=new Date(); return fmt(d); }
   function fmt(d){ return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }
   function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return fmt(d); }
@@ -513,31 +528,31 @@
     address:"הא באייר, ראש העין 4805023", phone:"0584067094",
     referral:"900000027238", treatment:"סל טיפול פיזיותרפיה", catalog:"57894",
     qty:"24", validFrom:"08/09/2026", validTo:"08/12/2026", provider:"שירלי מדמון ריבל",
-    prior:[]
+    treatments:[]
   };
 
   // ---- sample existing patients (with prior treatments) ----
   const PATIENTS = [
     {...DEMO, firstName:"יעקב יהב", lastName:"אליהו", id:"313474850", referral:"900000027238",
       phone:"0584067094", qty:"24",
-      prior:[{date:daysAgo(21)},{date:daysAgo(14)},{date:daysAgo(7)}]},
+      treatments:[{date:daysAgo(21)},{date:daysAgo(14)},{date:daysAgo(7)}]},
     {lastName:"כהן", firstName:"מרים", file:"810452213", id:"205558974",
       address:"ויצמן 12, פתח תקווה 4930112", phone:"0525549871",
       referral:"900000031002", treatment:"סל טיפול פיזיותרפיה", catalog:"57894",
       qty:"18", validFrom:"01/08/2026", validTo:"01/11/2026", provider:"שירלי מדמון ריבל",
-      prior:[{date:daysAgo(35)},{date:daysAgo(28)},{date:daysAgo(21)},{date:daysAgo(14)},{date:daysAgo(9)},{date:daysAgo(4)},{date:daysAgo(1)}]},
+      treatments:[{date:daysAgo(35)},{date:daysAgo(28)},{date:daysAgo(21)},{date:daysAgo(14)},{date:daysAgo(9)},{date:daysAgo(4)},{date:daysAgo(1)}]},
     {lastName:"לוי", firstName:"דוד", file:"640119302", id:"059887413",
       address:"הרצל 3, ראשון לציון 7521001", phone:"0547781220",
       referral:"900000028876", treatment:"סל טיפול פיזיותרפיה", catalog:"57894",
       qty:"12", validFrom:"20/08/2026", validTo:"20/11/2026", provider:"שירלי מדמון ריבל",
-      prior:[{date:daysAgo(6)}]}
+      treatments:[{date:daysAgo(6)}]}
   ];
 
   let data = null;
 
   // ---- PDF parse (best-effort; merges confident hits over baseline) ----
   async function parsePdf(file){
-    const out = {...DEMO, prior:[]};
+    const out = {...DEMO, treatments:[]};
     try{
       const buf = await file.arrayBuffer();
       const pdf = await T.getDocument({data:buf}).promise;
@@ -571,13 +586,16 @@
     refreshHeaders();
     $("#newRefBtn").hidden = (source==="new");
     setEditing(false); armSendBtn(); $("#dlBtn").hidden=true;
-    // prior rows
+    currentSource = source;
+    if(!Array.isArray(data.treatments)) data.treatments=[];
+    // persisted (signed) treatments — each tagged with its index for delete
     $("#rows").innerHTML="";
-    data.prior.forEach((p,i)=>{
-      const tr=document.createElement("tr"); tr.className="prior";
+    data.treatments.forEach((p,i)=>{
+      const tr=document.createElement("tr"); tr.className="prior"; tr.dataset.tidx=i;
+      const sig = p.signature ? `<img class="sig-img" src="${p.signature}" alt="חתימה">` : sigSvg(i);
       tr.innerHTML=`<td class="idx">${i+1}</td><td class="num">${data.referral}</td><td>${p.date}</td>`+
         `<td style="text-align:center">1</td><td>${data.treatment}</td><td class="num">${data.catalog}</td>`+
-        `<td class="sig-cell">${sigSvg(i)}</td>`+delCell();
+        `<td class="sig-cell">${sig}</td>`+delCell();
       $("#rows").appendChild(tr);
     });
     updateCount();
@@ -619,9 +637,9 @@
     const oldId=data.id;
     $("#fields").querySelectorAll(".v[data-k]").forEach(v=>{ data[v.dataset.k]=v.textContent.replace(/\s+/g," ").trim(); });
     refreshHeaders(); updateCount();
-    const rec=PATIENTS.find(p=>p.id===oldId);   // persist to the stored patient record
-    if(rec) Object.assign(rec,{firstName:data.firstName,lastName:data.lastName,file:data.file,
-      address:data.address,phone:data.phone,referral:data.referral,treatment:data.treatment,catalog:data.catalog,qty:data.qty});
+    // if the id itself was edited, drop the old record and save under the new id
+    if(oldId && oldId!==data.id){ const j=PATIENTS.findIndex(p=>p.id===oldId); if(j>=0) PATIENTS.splice(j,1); apiDeletePatient(oldId); }
+    persist();   // save to D1 + local list
   }
   $("#editBtn").onclick=()=>{ if(editing){ fieldsFromData(); setEditing(false);} else setEditing(true); };
   $("#saveBtn").onclick=()=>{ saveEdits(); setEditing(false); };
@@ -660,12 +678,20 @@
   $("#rows").addEventListener("click", e=>{
     const b=e.target.closest(".rowdel"); if(!b) return;
     const tr=b.closest("tr");
-    const wasSigned=tr.classList.contains("signed")||tr.classList.contains("prior");
+    const tidx=tr.dataset.tidx;
+    const isSaved=(tidx!==undefined);
     const dateTxt=tr.children[2]?.textContent||"";
-    if(!confirm(`למחוק את הטיפול מתאריך ${dateTxt}?${wasSigned?"\nשים לב: טיפול זה כבר נחתם/בוצע.":""}`)) return;
-    // if a signing link was already sent for this row, cancel it on the backend
+    if(!confirm(`למחוק את הטיפול מתאריך ${dateTxt}?${isSaved?"\nשים לב: טיפול זה כבר בוצע/נחתם.":""}`)) return;
+    if(isSaved){
+      // remove a persisted treatment from the record and re-save
+      if(Array.isArray(data.treatments)) data.treatments.splice(+tidx,1);
+      persist();
+      render(currentSource);   // rebuild rows + indexes from the saved record
+      return;
+    }
+    // pending (unsent-or-unsigned) row: cancel its signing link if one was sent
     const sid=tr.dataset.sid;
-    if(sid && !wasSigned && API_BASE){
+    if(sid && API_BASE){
       if(sid===currentSessionId){ stopPolling(); currentSessionId=null; }
       fetch(API_BASE+"/api/sessions/"+sid+"/cancel",{method:"POST"}).catch(()=>{});
     }
@@ -698,7 +724,7 @@
         <div class="pav">${init}</div>
         <div class="info"><div class="nm">${p.firstName} ${p.lastName}</div>
           <div class="meta">ת.ז ${p.id} · הפניה ${p.referral}</div></div>
-        <div class="prog"><b>${p.prior.length}</b>/${p.qty}<br><span style="font-size:11px">טיפולים</span></div>
+        <div class="prog"><b>${(p.treatments||[]).length}</b>/${p.qty}<br><span style="font-size:11px">טיפולים</span></div>
         <button class="pdel" data-del="${idx}" title="מחיקת מטופל" aria-label="מחיקת מטופל"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M10 11v6M14 11v6"/></svg></button>
         <svg class="chev" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </div>`;
@@ -711,7 +737,7 @@
     $("#plist").querySelectorAll(".pdel").forEach(b=>b.onclick=e=>{
       e.stopPropagation();
       const i=+b.dataset.del, p=PATIENTS[i];
-      if(confirm(`למחוק את ${p.firstName} ${p.lastName} מהרשימה?`)){ PATIENTS.splice(i,1); renderPlist(); }
+      if(confirm(`למחוק את ${p.firstName} ${p.lastName} מהרשימה?`)){ PATIENTS.splice(i,1); apiDeletePatient(p.id); renderPlist(); }
     });
   }
   $("#addPatientBtn").onclick=()=>{ show("stageNew"); };
@@ -730,13 +756,12 @@
   }
   wireDrop($("#dropNew"), $("#fileTagNew"), async file=>{
     goStep(2); data=await parsePdf(file);
-    if(!PATIENTS.some(p=>p.id===data.id)) PATIENTS.push(JSON.parse(JSON.stringify(data)));
-    render("new"); setTimeout(()=>show("stageData"),250);
+    render("new"); persist(); setTimeout(()=>show("stageData"),250);
   });
   wireDrop($("#dropExisting"), $("#fileTagExisting"), async file=>{
     goStep(2); data=await parsePdf(file);
     // an uploaded existing form is assumed to already carry history
-    data.prior=[{date:daysAgo(14)},{date:daysAgo(7)}];
+    data.treatments=[{date:daysAgo(14)},{date:daysAgo(7)}];
     render("existing"); setTimeout(()=>show("stageData"),250);
   });
 
@@ -759,7 +784,7 @@
     const parsed=await parsePdf(newRefInput.files[0]);
     // identity stays; referral details come from the new PDF; history resets
     data={...parsed,...keep,referral:parsed.referral,treatment:parsed.treatment,
-      catalog:parsed.catalog,qty:parsed.qty,validFrom:parsed.validFrom,validTo:parsed.validTo,prior:[]};
+      catalog:parsed.catalog,qty:parsed.qty,validFrom:parsed.validFrom,validTo:parsed.validTo,treatments:[]};
     goStep(2); render("existing"); newRefInput.value="";
   };
 
@@ -838,9 +863,8 @@
     data={ firstName:g("firstName"), lastName:g("lastName"), id:g("id"), file:g("file"),
       phone:g("phone"), referral:g("referral")||"—", treatment:g("treatment")||"סל טיפול פיזיותרפיה",
       catalog:g("catalog")||"—", address:g("address"), qty:g("qty")||"24",
-      validFrom:"", validTo:"", provider:"שירלי מדמון ריבל", prior:[] };
-    if(!PATIENTS.some(p=>p.id===data.id)) PATIENTS.push(JSON.parse(JSON.stringify(data)));
-    goStep(2); render("existing"); show("stageData");
+      validFrom:"", validTo:"", provider:"שירלי מדמון ריבל", treatments:[] };
+    goStep(2); render("existing"); persist(); show("stageData");
     document.querySelectorAll(".mf input").forEach(i=>i.value="");
   };
 
@@ -968,7 +992,13 @@
   function confirmSign(dataUrl){
     if(pendingCell){
       const tr=pendingCell.closest("tr"); tr.classList.remove("newrow"); tr.classList.add("signed");
+      const dateTxt=(tr.children[2]?.textContent||todayStr()).trim();
       pendingCell.innerHTML=`<img class="sig-img" src="${dataUrl}" alt="חתימת המטופל"><span class="sig-done"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>חתום ${todayStr()}</span>`;
+      // record the signed treatment and persist to D1
+      if(!Array.isArray(data.treatments)) data.treatments=[];
+      data.treatments.push({date:dateTxt, status:"signed", signature:dataUrl});
+      tr.dataset.tidx = data.treatments.length-1;
+      persist();
     }
     updateCount(); goStep(4);
     signed=true;   // now locked — no more sending for this treatment
@@ -987,4 +1017,14 @@
     body.innerHTML=`<div class="ph-idle ph-pad"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M11 18h2"/></svg><div class="t">הטלפון של הלקוח</div><div style="font-size:12px;margin-top:4px;">ההודעה תופיע כאן לאחר השליחה</div></div>`;
   }
   $("#resetBtn").onclick=()=>{ resetSoft(); show("stageChoice"); };
+
+  // ---- load patient records from D1 on startup ----
+  (async function initPatients(){
+    if(!API_BASE) return;
+    try{
+      const list = await apiListPatients();
+      if(list.length){ PATIENTS.length=0; PATIENTS.push(...list); }   // real data from D1
+      else { PATIENTS.forEach(p=>apiPutPatient(p)); }                 // first run: seed the samples
+    }catch(e){ /* backend unreachable (e.g. blocked network) → keep in-memory samples */ }
+  })();
 </script>

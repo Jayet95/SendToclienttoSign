@@ -12,6 +12,12 @@ binding = "SESSIONS"
 id = "53ee60c38105422c95d802dbf44176ed"
 preview_id = "846370f631244049b691a2c08b54082a"
 
+# D1 database for durable patient records
+[[d1_databases]]
+binding = "DB"
+database_name = "sign-db"
+database_id = "a6cc9377-95e0-4334-9287-ec9131540d4e"
+
 [vars]
 CLINIC_NAME = "מכון פיזיותרפיה — שירלי מדמון ריבל"
 # Allowed origin for the Pages site that calls this Worker.

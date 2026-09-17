@@ -56,6 +56,17 @@ export default {
         return cors(env, await sendSms(request, env));
       }
 
+      // --- patient records (D1) ---
+      // GET /api/patients        -> list all patients
+      if (pathname === "/api/patients" && method === "GET") {
+        return cors(env, await listPatients(env));
+      }
+      // PUT /api/patients/:id    -> create/update a patient
+      // DELETE /api/patients/:id -> remove a patient
+      m = pathname.match(/^\/api\/patients\/([^/]+)$/);
+      if (m && method === "PUT") return cors(env, await putPatient(request, env, decodeURIComponent(m[1])));
+      if (m && method === "DELETE") return cors(env, await deletePatient(env, decodeURIComponent(m[1])));
+
       // GET /s/:id  -> the patient-facing signing page
       m = pathname.match(/^\/s\/([A-Za-z0-9_-]+)$/);
       if (m && method === "GET") {
@@ -146,6 +157,34 @@ async function signSession(request, env, id) {
   s.signature = sig;
   await env.SESSIONS.put(id, JSON.stringify(s), { expirationTtl: SESSION_TTL });
   return json({ ok: true, status: "signed", signedAt: s.signedAt });
+}
+
+/* ------------------------- patient records (D1) ------------------------- */
+
+async function listPatients(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT doc FROM patients ORDER BY updated_at DESC"
+  ).all();
+  const patients = (results || [])
+    .map((r) => { try { return JSON.parse(r.doc); } catch { return null; } })
+    .filter(Boolean);
+  return json({ patients });
+}
+
+async function putPatient(request, env, id) {
+  const doc = await request.json().catch(() => null);
+  if (!doc || typeof doc !== "object") return json({ error: "invalid_doc" }, 400);
+  doc.id = id; // keep the key and the document in sync
+  await env.DB.prepare(
+    "INSERT INTO patients (id, doc, updated_at) VALUES (?1, ?2, ?3) " +
+    "ON CONFLICT(id) DO UPDATE SET doc = ?2, updated_at = ?3"
+  ).bind(id, JSON.stringify(doc), new Date().toISOString()).run();
+  return json({ ok: true });
+}
+
+async function deletePatient(env, id) {
+  await env.DB.prepare("DELETE FROM patients WHERE id = ?1").bind(id).run();
+  return json({ ok: true });
 }
 
 async function cancelSession(env, id) {
@@ -316,7 +355,7 @@ function cors(env, res) {
   const origin = (env && env.ALLOWED_ORIGIN) || "*";
   const h = new Headers(res.headers);
   h.set("Access-Control-Allow-Origin", origin);
-  h.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  h.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   h.set("Access-Control-Allow-Headers", "Content-Type");
   return new Response(res.body, { status: res.status, headers: h });
 }
