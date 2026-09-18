@@ -304,6 +304,11 @@
   .spin{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;}
   @keyframes sp{to{transform:rotate(360deg);}}
   #userBtn{display:flex;align-items:center;}
+  .signout{background:var(--surface-2);border:1px solid var(--line);cursor:pointer;font-family:inherit;
+    font-weight:600;font-size:12.5px;color:var(--ink);padding:7px 12px;border-radius:999px;
+    display:inline-flex;align-items:center;gap:6px;transition:.15s;}
+  .signout svg{width:15px;height:15px;stroke:currentColor;}
+  .signout:hover{border-color:var(--warn);color:var(--warn);}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 </style>
 
@@ -330,6 +335,10 @@
       <p>מילוי אוטומטי של דוח ביצוע טיפולים + חתימת מטופל דיגיטלית</p>
     </div>
     <div id="userBtn"></div>
+    <button class="signout" id="signOutBtn" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+      התנתקות
+    </button>
     <div class="demo-flag" id="demoFlag"><span class="dot"></span>אב-טיפוס להדגמה</div>
   </header>
 
@@ -1081,6 +1090,7 @@
   // ---- Clerk auth gate: therapists sign in; patients (the /s/:id page) never see this ----
   function waitForClerk(ms){ return new Promise(res=>{ const t0=Date.now(); (function chk(){ if(window.Clerk&&window.Clerk.load) return res(true); if(Date.now()-t0>ms) return res(false); setTimeout(chk,100); })(); }); }
   function mountUser(){ const el=$("#userBtn"); if(el&&window.Clerk){ el.innerHTML=""; try{ window.Clerk.mountUserButton(el,{afterSignOutUrl:location.href}); }catch(e){} } }
+  $("#signOutBtn").onclick=async()=>{ try{ await window.Clerk.signOut(); }catch(e){} location.reload(); };
   async function boot(){
     const gate=$("#authGate"); gate.hidden=false;   // cover the app until auth resolves
     const has=await waitForClerk(4000);
@@ -1090,7 +1100,7 @@
         CLERK_ON=true;
         if(window.Clerk.user){
           gate.hidden=true; $("#demoFlag").hidden=true;
-          mountUser(); await initPatients();
+          mountUser(); $("#signOutBtn").hidden=false; await initPatients();
         } else {
           $("#gateLoading").hidden=true;
           window.Clerk.mountSignIn($("#signinBox"));
